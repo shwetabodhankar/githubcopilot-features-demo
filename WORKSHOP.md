@@ -48,6 +48,11 @@
 
 Mention the **trust ladder**: completion → chat suggestion → edits across files → agent mode. Higher up = more power, more review needed.
 
+### 🎤 Ask the room (30 sec, hands)
+> *"Quick show of hands — who has used Copilot for more than a week? More than a month? Anyone shipped code today written with Copilot's help?"*
+>
+> Use the answer to calibrate pace: if mostly beginners, slow down on Segment 2; if mostly experienced, spend more time on prompting (Segment 6).
+
 ---
 
 ## 0:03 — Segment 1: Inline Completions (7 min)
@@ -88,6 +93,11 @@ Watch Copilot complete the body. Point out it inferred the *intent* from the nam
 ### Limit to call out
 Type a function that needs the *exact* business rule from a Confluence page. It'll invent something plausible-but-wrong. **"If the rule lives outside the repo, you must paste it in."**
 
+### 🎤 Ask the room (30 sec)
+> *"What did Copilot get right in that suggestion, and what did it get wrong? Anybody spot something they wouldn't have accepted?"*
+>
+> Goal: train attendees to *read* the suggestion, not just press Tab.
+
 ---
 
 ## 0:10 — Segment 2: Copilot Chat Fundamentals (8 min)
@@ -101,36 +111,93 @@ Type a function that needs the *exact* business rule from a Confluence page. It'
 | **Chat Panel** | `Ctrl+Alt+I` | Q&A, multi-file, planning |
 | **Agent mode** | Panel → mode dropdown → *Agent* | "do the whole task, edit files, run terminal" |
 
-### Slash commands (show in panel)
-- `/explain` — what does this do?
-- `/fix` — fix the problem (often paired with a selection or error)
-- `/tests` — generate tests for selection
-- `/doc` — add docstring / XML doc
-- `/new` — scaffold a new project or file
-- `/clear` — wipe chat memory (use this when context goes stale!)
+**Mental model to share:** every chat prompt is built from three optional building blocks:
 
-### Chat variables (the `#` ones)
-- `#file:<name>` — attach a specific file
-- `#selection` — current editor selection
-- `#editor` — the whole active file
-- `#codebase` — let Copilot search the workspace (slower, more powerful)
-- `#terminalLastCommand` — attach what just ran
-- `#problems` — current diagnostics
+```
+   [@participant]   [/command]   [#variable…]   your question
+   └── WHO ──┘     └── WHAT ──┘  └── CONTEXT ──┘  └── INTENT ──┘
+```
 
-### Chat participants (the `@` ones)
-- `@workspace` — answers grounded in your repo (use this 80% of the time)
-- `@vscode` — "how do I do X in VS Code?"
-- `@terminal` — shell commands
+The more of these you set explicitly, the less Copilot has to guess.
 
-> **Demo:** in the panel, type
-> `@workspace what does the OrdersController do and which services does it call?`
-> Show how it cites files. Click the citations.
+### Slash commands — *"what kind of task is this?"*
+
+A **slash command** picks a pre-built recipe so Copilot knows what shape of answer to produce. It pre-loads a system prompt for that task type, so you don't have to write "please explain in 3 paragraphs covering purpose, inputs, outputs…" every time.
+
+| Command | What it does | Typical input | Best paired with |
+|--|--|--|--|
+| `/explain` | Explains the selected code in plain English (purpose, inputs, outputs, side effects, gotchas). | selection or `#file` | `#selection` |
+| `/fix` | Proposes a fix for a problem in the selection or attached diagnostics. | selection + `#problems` | `#file:` |
+| `/tests` | Generates unit tests for the selection in your project's existing test style. | a method or class | `#file:` of the existing test file so style matches |
+| `/doc` | Adds doc comments (XML doc / JSDoc / docstring) appropriate to the language. | selection | — |
+| `/new` | Scaffolds a new project, file, or component from a description. | natural-language description | — |
+| `/clear` | Wipes the current chat thread's memory. | — | use when topic changes |
+
+> Slash commands are **scoped to the surface you're in**. `/fix` in inline chat fixes the selection. `/fix` in the panel can span files.
+
+### 🎤 Quick check (20 sec)
+> *"If I select a method and run `/tests`, what's one piece of context Copilot still doesn't have?"*
+> Answer: your project's test conventions (xUnit vs NUnit, FluentAssertions vs Shouldly, naming pattern). You give it that with **`#file:` an existing test file** — that's the bridge to chat variables.
+
+### Chat variables — *"what should I look at?"*
+
+A **chat variable** (prefixed with `#`) is an explicit pointer that tells Copilot *which* code, file, or diagnostic to use as context. Without them, Copilot guesses from the open editor; with them, you're precise.
+
+| Variable | What it attaches | When to use |
+|--|--|--|
+| `#file:<name>` | A specific file's contents. Use the file picker that pops up. | Whenever the answer depends on a file that isn't the active one. |
+| `#selection` | The currently selected lines. | Inline chat uses this implicitly; explicit in the panel. |
+| `#editor` | The whole active file. | When the question is about the file as a whole. |
+| `#codebase` | Lets Copilot search the workspace for relevant code itself. | When you don't know which file matters — slower but powerful. |
+| `#problems` | The current diagnostics (Problems panel). | Pair with `/fix` to ground the fix in real errors. |
+| `#terminalLastCommand` | Last terminal command + its output. | "why did this build fail?" |
+| `#changes` | The current git diff. | Generating commit messages or PR descriptions. |
+
+> **Rule of thumb:** if you'd have to *paste* something to make the answer correct, use a `#` variable instead. Pasting bloats the prompt and loses syntax highlighting.
+
+### Chat participants — *"who am I talking to?"*
+
+A **chat participant** (prefixed with `@`) routes your prompt to a specialised "persona" with its own knowledge and tools. The default participant just talks to the model with the visible context; an `@participant` brings extra capabilities.
+
+| Participant | What it knows / can do | Example |
+|--|--|--|
+| `@workspace` | Indexes and reasons over your **whole repo**; cites files in answers. | `@workspace where is order total calculated?` |
+| `@vscode` | Knows VS Code itself — settings, keybindings, commands, extensions. | `@vscode how do I split the editor vertically?` |
+| `@terminal` | Suggests and explains shell commands; aware of your shell (pwsh, bash). | `@terminal find all files larger than 10MB` |
+
+> Extensions can register **their own participants** (e.g., `@github`, `@docker`, `@azure`). Type `@` in the panel to see what's installed.
+
+### Putting it together — live demo (1 min)
+
+In the panel, type:
+```
+@workspace /explain #file:backend/Controllers/OrdersController.cs
+What does this controller do and which services does it call?
+```
+
+Show:
+- The `@workspace` participant cites file paths in the answer.
+- Click a citation — it jumps to the file.
+- Compare the same prompt *without* `@workspace` — answer is more generic, no citations.
+
+### 🎤 Ask the room (45 sec)
+> *"I want to generate tests for `PricingService.cs` in the same style as our existing tests. Write the prompt out loud — which participant, command, and variables would you use?"*
+>
+> Expected answer (any reasonable variant):
+> `/tests #file:backend/Services/PricingService.cs #file:backend.Tests/PricingServiceTests.cs`
+>
+> Use this to introduce Segment 4's pattern.
 
 ---
 
 ## 0:18 — Segment 3: SDLC Demo #1 — Diagnose & Fix (9 min)
 
-Open the running React app. Click an order — it 500s. Open the terminal: `NullReferenceException` in `OrderService.GetOrderTotal`.
+Open the running React app. Click order #2 (Bob) — it 500s. Open the backend terminal: `InvalidOperationException: Sequence contains no elements` in `OrdersController.GetById`.
+
+### 🎤 Ask the room *before* you debug (20 sec)
+> *"You see a 500 in production. What's the first thing you ask Copilot — fix it, or explain it?"*
+>
+> The right answer is **explain first**. Use the moment to reinforce the rule: *understand before you change*.
 
 ### Step 1 — Understand before changing
 1. Open `OrderService.cs`, select `GetOrderTotal`.
@@ -155,6 +222,11 @@ The fix must:
 ### Step 3 — Review the diff like a PR
 - Don't blind-accept. Use the diff view.
 - Run the test. Click the order again in the browser.
+
+### 🎤 Ask the room (30 sec)
+> *"Look at the prompt we just used. What would happen if I removed `#problems` from it? What about `#file:OrderService.cs`?"*
+>
+> Drives home: each `#` variable changes the answer measurably. Drop one and the fix gets vaguer.
 
 ### Bonus — `/explain` for onboarding
 Right-click a folder → "Copilot: Explain this folder" (or in chat: `@workspace explain the structure of /backend`). Great for new hires.
@@ -190,6 +262,11 @@ Use FluentAssertions style. Keep test names in the Method_Scenario_Expected patt
 
 **Teaching point:** Copilot is *great* at writing tests but *bad* at deciding what's worth testing. You bring the judgment; it brings the typing speed.
 
+### 🎤 Ask the room (45 sec)
+> *"Copilot just generated a test that asserts `CalculateLinePrice` throws when quantity is zero. The interface comment doesn't say anything about quantity == 0. Do you accept the test, fix the interface contract, or delete the test? Defend your choice."*
+>
+> There is no right answer — the point is that **someone has to decide**, and that someone is *not* Copilot.
+
 ---
 
 ## 0:35 — Segment 5: Architecture & Mermaid Round-Trip (5 min)
@@ -223,6 +300,11 @@ and DI registration. Don't implement Redis client yet — stub it. Show me a pla
 ### Bonus (if time) — Swagger / OpenAPI
 See [SWAGGER.md](SWAGGER.md) for a 10-prompt playbook that takes Swagger from "bare" to "production-ready" (XML docs → `[ProducesResponseType]` → ProblemDetails → generated TS client). Pick **prompt #2 and #3** for a 90-second taste.
 
+### 🎤 Ask the room (30 sec)
+> *"Mermaid diagrams live in your repo as plain text. What does that unlock for code review that PNGs in Confluence don't?"*
+>
+> Answer: diff-able diagrams, PR-reviewable architecture changes, Copilot can read them as `#file:` context.
+
 ---
 
 ## 0:40 — Segment 6: Good vs Bad Prompting (3 min)
@@ -234,6 +316,13 @@ Open `PROMPTS.md` and walk through 3 paired examples live. Key rules:
 3. **Anchor to files.** Use `#file:` instead of pasting.
 4. **One task per turn.** Bundle = bad diff.
 5. **Iterate, don't restart.** Refine the last answer; don't re-prompt from scratch.
+
+### 🎤 Audience exercise (60 sec — pair up if room allows)
+> Bad prompt on the screen: *"make the orders endpoint better"*.
+>
+> *"Rewrite this prompt using the WHAT / HOW / CONSTRAINTS / CHECK structure. You have 60 seconds. Best rewrite wins a sticker."*
+>
+> Collect 2–3 answers out loud. Common improvements: pick a specific endpoint, name the metric ("reduce response time" / "return ProblemDetails on error"), constrain ("don't add new packages"), give an acceptance test.
 
 ---
 
@@ -258,6 +347,11 @@ Open `PROMPTS.md` and walk through 3 paired examples live. Key rules:
 
 ### The one rule
 > **You are responsible for every line you accept.** Copilot speeds up typing; it doesn't transfer accountability.
+
+### 🎤 Closing question (60 sec)
+> *"Name one task in your current sprint where you'll try Copilot first thing tomorrow morning — and one task where you absolutely won't. Why?"*
+>
+> Two or three answers out loud. This converts demo energy into a Monday-morning commitment, which is the only metric that matters.
 
 ---
 
